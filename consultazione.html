@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lavanderia Rosin - Consultazione</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f0f4f8; padding: 10px; }
+  h1 { text-align: center; color: #1a5276; font-size: 20px; margin: 10px 0; }
+  .sezione { background: white; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+  label { font-size: 13px; color: #555; display: block; margin-bottom: 4px; }
+  input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 15px; margin-bottom: 10px; }
+  button { width: 100%; padding: 12px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
+  .btn-reset { background: #aaa; color: white; margin-top: 8px; }
+  .risultati { margin-top: 5px; }
+  .capo { background: white; border-radius: 8px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border-left: 5px solid #ccc; }
+  .capo.lavorato { border-left-color: #27ae60; }
+  .capo.in-lavanderia { border-left-color: #e67e22; }
+  .capo-titolo { font-size: 15px; font-weight: bold; color: #1a5276; margin-bottom: 6px; }
+  .capo-riga { font-size: 13px; color: #555; margin-bottom: 3px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; }
+  .badge.lavorato { background: #27ae60; }
+  .badge.in-lavanderia { background: #e67e22; }
+  .nessun { text-align: center; color: #888; padding: 20px; font-size: 14px; }
+  .separatore { text-align: center; font-size: 13px; color: #888; margin: 10px 0; }
+</style>
+</head>
+<body>
+
+<h1>🧺 Lavanderia Rosin</h1>
+
+<div class="sezione">
+  <label>Cerca per cliente</label>
+  <input type="text" id="filtroCliente" placeholder="Nome cliente..." oninput="filtra()">
+</div>
+
+<div class="separatore">oppure</div>
+
+<div class="sezione">
+  <label>Data ritiro dal</label>
+  <input type="date" id="dataDal" onchange="filtra()">
+  <label>Data ritiro al</label>
+  <input type="date" id="dataAl" onchange="filtra()">
+</div>
+
+<button class="btn-reset" onclick="reset()">Azzera filtri</button>
+
+<br><br>
+<div class="risultati" id="risultati">
+  <div class="nessun">Caricamento dati...</div>
+</div>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxZLsRafobf73tvebM_kydDOnx6_NYpga64mw-MQ0_aKMWLh5NnIdl47ctbRPOqhkCInw/exec";
+
+let tuttiICapi = [];
+
+async function caricaDati() {
+  try {
+    const resp = await fetch(SCRIPT_URL);
+    const dati = await resp.json();
+    tuttiICapi = dati;
+    mostra(tuttiICapi);
+  } catch(e) {
+    document.getElementById("risultati").innerHTML = '<div class="nessun">Errore caricamento dati.</div>';
+  }
+}
+
+function parseData(str) {
+  if (!str) return null;
+  const d = new Date(str);
+  if (!isNaN(d)) return d;
+  const p = str.split("/");
+  if (p.length === 3) return new Date(p[2], p[1]-1, p[0]);
+  return null;
+}
+
+function formattaData(str) {
+  if (!str) return "—";
+  const d = parseData(str);
+  if (!d) return str;
+  return d.toLocaleDateString("it-IT");
+}
+
+function filtra() {
+  const cliente = document.getElementById("filtroCliente").value.trim().toLowerCase();
+  const dal = document.getElementById("dataDal").value;
+  const al = document.getElementById("dataAl").value;
+
+  let filtrati = tuttiICapi;
+
+  if (cliente.length > 0) {
+    const parole = cliente.split(" ").filter(p => p.length > 0);
+    filtrati = filtrati.filter(c =>
+      parole.every(p => c.cliente.toLowerCase().includes(p))
+    );
+  }
+
+  if (dal) {
+    const dataDal = new Date(dal);
+    filtrati = filtrati.filter(c => {
+      const d = parseData(c.data_ritiro);
+      return d && d >= dataDal;
+    });
+  }
+
+  if (al) {
+    const dataAl = new Date(al);
+    filtrati = filtrati.filter(c => {
+      const d = parseData(c.data_ritiro);
+      return d && d <= dataAl;
+    });
+  }
+
+  mostra(filtrati);
+}
+
+function mostra(capi) {
+  const div = document.getElementById("risultati");
+  if (capi.length === 0) {
+    div.innerHTML = '<div class="nessun">Nessun capo trovato.</div>';
+    return;
+  }
+
+  let html = `<div style="font-size:13px;color:#888;margin-bottom:10px;">${capi.length} capo/i trovato/i</div>`;
+
+  capi.forEach(c => {
+    const isLavorato = c.stato === "LAVORATO";
+    const classeDiv = isLavorato ? "lavorato" : "in-lavanderia";
+    const classeBadge = isLavorato ? "lavorato" : "in-lavanderia";
+    const testoStato = isLavorato ? "LAVORATO" : "IN LAVANDERIA";
+
+    html += `
+      <div class="capo ${classeDiv}">
+        <div class="capo-titolo">N° ${c.n_capo} — ${c.cliente}</div>
+        <div class="capo-riga">📦 ${c.tipo_capo} — ${c.lavorazione}</div>
+        ${c.note ? `<div class="capo-riga">📝 ${c.note}</div>` : ""}
+        <div class="capo-riga">📅 Ritiro: <strong>${formattaData(c.data_ritiro)}</strong></div>
+        <div style="margin-top:6px;"><span class="badge ${classeBadge}">${testoStato}</span></div>
+      </div>`;
+  });
+
+  div.innerHTML = html;
+}
+
+function reset() {
+  document.getElementById("filtroCliente").value = "";
+  document.getElementById("dataDal").value = "";
+  document.getElementById("dataAl").value = "";
+  mostra(tuttiICapi);
+}
+
+caricaDati();
+</script>
+</body>
+</html>
